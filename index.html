@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Setlist Tool</title>
+  <style>
+    :root{
+      --font-family: "Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif;
+      --font-size: 36px;
+      --line-height: 1.35;
+      --text-color: #ffffff;
+      --shadow: 0 2px 10px rgba(0,0,0,.35);
+      --visible-lines: 10;
+      --scroll-speed: 38; /* px/sec */
+      --pad: 10px;
+      --gap-lines: 3;
+    }
+    html, body { height: 100%; margin: 0; background: #0b0b0b; color: #fff; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+
+    /* レイアウト */
+    .app{
+      height: 100%;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 12px;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+    body.overlay .app{ grid-template-columns: 1fr; padding: 0; }
+    body.overlay .editor { display: none; }
+    body.overlay { background: transparent; }
+
+    /* 左：編集 */
+    .editor{
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 16px;
+      padding: 12px;
+      box-sizing: border-box;
+    }
+    .title{ font-weight: 800; font-size: 13px; opacity: .9; margin: 0 0 10px; }
+    label{ display:block; font-size: 12px; opacity:.9; margin: 10px 0 6px; }
+    input, textarea{
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.35);
+      color: #fff;
+      padding: 10px 10px;
+      outline: none;
+      font-size: 13px;
+    }
+    textarea{ min-height: 160px; resize: vertical; }
+    .row{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btns{ display:flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    button{
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 10px;
+      background: rgba(255,255,255,.12);
+      color: #fff;
+      cursor: pointer;
+      font-weight: 800;
+      font-size: 12px;
+    }
+    button:hover{ background: rgba(255,255,255,.18); }
+    .hint{ font-size: 12px; opacity: .85; line-height: 1.35; margin-top: 8px; }
+
+    /* 右：表示（透明背景にも対応） */
+    .previewWrap{
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.10);
+      background: transparent;
+    }
+    body.overlay .previewWrap{
+      border: none;
+      border-radius: 0;
+    }
+    .viewport{
+      overflow: hidden;
+      padding: var(--pad);
+      filter: drop-shadow(var(--shadow));
+      height: calc(var(--font-size) * var(--line-height) * var(--visible-lines) + var(--pad) * 2);
+      background: transparent;
+      font-family: var(--font-family);
+      color: var(--text-color);
+    }
+    .track{ will-change: transform; transform: translateY(0px); }
+    .line{
+      font-size: var(--font-size);
+      line-height: var(--line-height);
+      white-space: pre;
+    }
+    .blank{ opacity: 0; }
+    .badge{
+      position:absolute; right: 10px; bottom: 10px;
+      font-size: 12px; opacity: .65;
+      background: rgba(0,0,0,.35);
+      padding: 6px 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.12);
+      user-select: none;
+    }
+    body.overlay .badge{ display:none; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="editor">
+      <p class="title">Setlist Tool（左で編集 → 右に即反映）</p>
+
+      <label>1曲ずつ追加（Enterで追加）</label>
+      <input id="addOne" placeholder="曲名を入力してEnter" />
+
+      <label>曲一覧（改行区切り / コピペOK）</label>
+      <textarea id="songsInput" placeholder="1行=1曲。コピペOK"></textarea>
+
+      <div class="row">
+        <div>
+          <label>表示行数（10推奨）</label>
+          <input id="visibleLines" type="number" min="1" max="30" />
+        </div>
+        <div>
+          <label>スクロール速度（px/秒）</label>
+          <input id="speed" type="number" min="5" max="200" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>フォントサイズ（px）</label>
+          <input id="fontSize" type="number" min="10" max="120" />
+        </div>
+        <div>
+          <label>行間（line-height）</label>
+          <input id="lineHeight" type="number" step="0.05" min="0.8" max="2.2" />
+        </div>
+      </div>
+
+      <label>フォント（PCフォント名 or Google Fonts名）</label>
+      <input id="fontFamily" placeholder='例: "M PLUS 1", "Noto Sans JP", "Yu Gothic"' />
+
+      <div class="row">
+        <div>
+          <label>文字色（CSS）</label>
+          <input id="textColor" placeholder="#ffffff / rgba(...) など" />
+        </div>
+        <div>
+          <label>つなぎ目の空白行（固定3）</label>
+          <input value="3" disabled />
+        </div>
+      </div>
+
+      <div class="btns">
+        <button id="applyBtn">反映</button>
+        <button id="clearBtn">全消し</button>
+        <button id="copyOverlayBtn">表示だけURLをコピー</button>
+      </div>
+
+      <div class="hint">
+        ✅ 仕様：10曲超で自動スクロール／最後→最初の間に3行空白／フォント自由<br/>
+        OBSは <b>右側だけをウィンドウキャプチャでクロップ</b>が安定。<br/>
+        もしくはURLに <b>?overlay=1</b> を付けて表示専用でもOK。
+      </div>
+    </div>
+
+    <div class="previewWrap">
+      <div class="viewport" id="viewport">
+        <div class="track" id="track"></div>
+      </div>
+      <div class="badge" id="badge"></div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const qs = new URLSearchParams(location.search);
+  document.body.classList.toggle("overlay", qs.get("overlay") === "1");
+
+  const STORAGE_KEY = "setlist_tool_github_v1";
+
+  const elTrack = document.getElementById("track");
+  const elViewport = document.getElementById("viewport");
+  const elBadge = document.getElementById("badge");
+
+  const elSongsInput = document.getElementById("songsInput");
+  const elAddOne = document.getElementById("addOne");
+  const elFontFamily = document.getElementById("fontFamily");
+  const elVisibleLines = document.getElementById("visibleLines");
+  const elSpeed = document.getElementById("speed");
+  const elFontSize = document.getElementById("fontSize");
+  const elLineHeight = document.getElementById("lineHeight");
+  const elTextColor = document.getElementById("textColor");
+
+  const defaultState = {
+    songs: [],
+    fontFamily: '"Noto Sans JP", system-ui, -apple-system, "Segoe UI", sans-serif',
+    visibleLines: 10,
+    speed: 38,
+    fontSize: 36,
+    lineHeight: 1.35,
+    textColor: "#ffffff",
+  };
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return structuredClone(defaultState);
+      const s = JSON.parse(raw);
+      return { ...structuredClone(defaultState), ...s };
+    } catch {
+      return structuredClone(defaultState);
+    }
+  }
+  function saveState(s){ localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+
+  let state = loadState();
+
+  // Google Fonts 自動読み込み（名前が存在しない場合も害は少ない）
+  function ensureGoogleFontLoaded(fontFamily) {
+    const first = (fontFamily || "").split(",")[0].trim().replace(/^["']|["']$/g, "");
+    if (!first) return;
+    const id = "gf_" + first.replace(/\s+/g, "_").replace(/[^\w\-]/g, "");
+    if (document.getElementById(id)) return;
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    const familyParam = encodeURIComponent(first).replace(/%20/g, "+");
+    link.href = `https://fonts.googleapis.com/css2?family=${familyParam}:wght@300;400;600;700&display=swap`;
+    document.head.appendChild(link);
+  }
+
+  function applyCSSVars(){
+    document.documentElement.style.setProperty("--font-family", state.fontFamily);
+    document.documentElement.style.setProperty("--visible-lines", String(state.visibleLines));
+    document.documentElement.style.setProperty("--scroll-speed", String(state.speed));
+    document.documentElement.style.setProperty("--font-size", String(state.fontSize) + "px");
+    document.documentElement.style.setProperty("--line-height", String(state.lineHeight));
+    document.documentElement.style.setProperty("--text-color", state.textColor);
+
+    const h = state.fontSize * state.lineHeight * state.visibleLines + (10 * 2);
+    elViewport.style.height = h + "px";
+  }
+
+  function normalizeSongs(text){
+    return text.split(/\r?\n/).map(s => s.trim()).filter(s => s.length > 0);
+  }
+
+  function renderTrack(lines){
+    elTrack.innerHTML = "";
+    for (const ln of lines) {
+      const div = document.createElement("div");
+      div.className = "line" + (ln === "" ? " blank" : "");
+      div.textContent = ln === "" ? " " : ln;
+      elTrack.appendChild(div);
+    }
+  }
+
+  // スクロール（10曲超で自動）
+  let rafId=null, lastTs=null, offsetY=0;
+  function stopScroll(){
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId=null; lastTs=null; offsetY=0;
+    elTrack.style.transform = "translateY(0px)";
+  }
+
+  function startScrollIfNeeded(){
+    stopScroll();
+
+    const songs = state.songs.slice();
+    const gapLines = ["", "", ""]; // 仕様：3行空白
+
+    elBadge.textContent = `${songs.length}曲 / ${new Date().toLocaleTimeString()}`;
+
+    if (songs.length <= state.visibleLines) {
+      renderTrack(songs);
+      return;
+    }
+
+    const loopLines = songs.concat(gapLines, songs);
+    renderTrack(loopLines);
+
+    const linePx = state.fontSize * state.lineHeight;
+    const cycleHeight = (songs.length + gapLines.length) * linePx;
+    const speed = Number(state.speed);
+
+    function tick(ts){
+      if (lastTs == null) lastTs = ts;
+      const dt = (ts - lastTs) / 1000;
+      lastTs = ts;
+
+      offsetY += speed * dt;
+      if (offsetY >= cycleHeight) offsetY -= cycleHeight;
+
+      elTrack.style.transform = `translateY(${-offsetY}px)`;
+      rafId = requestAnimationFrame(tick);
+    }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function syncUI(){
+    if (!elSongsInput) return;
+    elSongsInput.value = state.songs.join("\n");
+    elFontFamily.value = state.fontFamily;
+    elVisibleLines.value = state.visibleLines;
+    elSpeed.value = state.speed;
+    elFontSize.value = state.fontSize;
+    elLineHeight.value = state.lineHeight;
+    elTextColor.value = state.textColor;
+  }
+
+  function applyFromUI(){
+    state.songs = normalizeSongs(elSongsInput.value);
+    state.fontFamily = elFontFamily.value.trim() || defaultState.fontFamily;
+    state.visibleLines = Math.max(1, Math.min(30, Number(elVisibleLines.value) || 10));
+    state.speed = Math.max(5, Math.min(200, Number(elSpeed.value) || 38));
+    state.fontSize = Math.max(10, Math.min(120, Number(elFontSize.value) || 36));
+    state.lineHeight = Math.max(0.8, Math.min(2.2, Number(elLineHeight.value) || 1.35));
+    state.textColor = (elTextColor.value.trim() || "#ffffff");
+
+    ensureGoogleFontLoaded(state.fontFamily);
+    applyCSSVars();
+    saveState(state);
+    startScrollIfNeeded();
+  }
+
+  // イベント
+  document.getElementById("applyBtn")?.addEventListener("click", applyFromUI);
+  document.getElementById("clearBtn")?.addEventListener("click", () => {
+    elSongsInput.value = "";
+    applyFromUI();
+  });
+
+  elAddOne?.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const v = elAddOne.value.trim();
+    if (!v) return;
+    const songs = normalizeSongs(elSongsInput.value);
+    songs.push(v);
+    elSongsInput.value = songs.join("\n");
+    elAddOne.value = "";
+    applyFromUI();
+  });
+
+  document.getElementById("copyOverlayBtn")?.addEventListener("click", async () => {
+    const url = new URL(location.href);
+    url.searchParams.set("overlay", "1");
+    try{
+      await navigator.clipboard.writeText(url.toString());
+      alert("表示専用URL（?overlay=1）をコピーしたよ");
+    } catch {
+      prompt("このURLをコピーしてOBSに貼ってね：", url.toString());
+    }
+  });
+
+  // 初期化
+  ensureGoogleFontLoaded(state.fontFamily);
+  applyCSSVars();
+  syncUI();
+  startScrollIfNeeded();
+})();
+</script>
+</body>
+</html>
