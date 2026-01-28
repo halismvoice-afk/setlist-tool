@@ -12,7 +12,7 @@
       --text-color: #ffffff;
       --shadow: 0 2px 10px rgba(0,0,0,.35);
       --visible-lines: 12;
-      --scroll-speed: 15; /* px/sec */
+      --scroll-speed: 20; /* px/sec */
       --pad: 10px;
     }
     html, body { height: 100%; margin: 0; background: #0b0b0b; color: #fff; }
@@ -77,7 +77,7 @@ Song K</textarea>
 
       <div class="row">
         <div><label>表示行数</label><input id="visibleLines" type="number" value="12"/></div>
-        <div><label>速度(px/秒)</label><input id="speed" type="number" value="15"/></div>
+        <div><label>速度(px/秒)</label><input id="speed" type="number" value="20"/></div>
       </div>
 
       <div class="row">
@@ -171,7 +171,7 @@ Song K</textarea>
   function start(){
     stop();
 
-    const gap = ['', '', '']; // 仕様：つなぎ目は3行空白
+    const gap = ['', '']; // 仕様：つなぎ目は2行空白
     const raw = state.songs.map(s => String(s || '').trim()).filter(Boolean);
 
     // ★ゼロ埋め幅：曲数に合わせる（例: 9曲→1桁, 10曲→2桁, 100曲→3桁）
