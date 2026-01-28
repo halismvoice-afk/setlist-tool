@@ -273,12 +273,22 @@
     stopScroll();
 
     const songs = state.songs.slice();
+    // ★ゼロ埋め幅（曲数に合わせる）
+const width = Math.max(1, String(songs.length).length);
+
+// ★自動番号付け（既存の「1. 」は除去）
+const numberedSongs = songs.map((t, i) => {
+  const clean = String(t).replace(/^\s*\d+\.\s*/, '');
+  const n = String(i + 1).padStart(width, '0');
+  return `${n}. ${clean}`;
+});
+
     const gapLines = ["", "", ""]; // 仕様：3行空白
 
     elBadge.textContent = `${songs.length}曲 / ${new Date().toLocaleTimeString()}`;
 
     if (songs.length <= state.visibleLines) {
-      renderTrack(songs);
+      renderTrack(numberedSongs);
       return;
     }
 
